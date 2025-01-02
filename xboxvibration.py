@@ -6,11 +6,14 @@ import threading
 import random
 import math
 import xinput
+import requests
 
 try:
     xinput = ctypes.windll.xinput1_4
 except AttributeError:
     xinput = ctypes.windll.xinput1_3
+
+current_version = "v0.1.4"
 
 class XINPUT_VIBRATION(ctypes.Structure):
     _fields_ = [
@@ -31,6 +34,21 @@ def get_connected_controllers():
             controllers.append(i)
     return controllers
 
+def check_github_release():
+    repo_owner = "jyup-escape"
+    repo_name = "Xbox-Massage-Machine"
+    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/releases/latest"
+    
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        latest_release = response.json()
+        latest_version = latest_release['tag_name']
+        return latest_version
+    except requests.exceptions.RequestException as e:
+        print(f"エラー: {e}")
+        return None
+
 class VibrationApp:
     def __init__(self, root):
         self.root = root
@@ -38,6 +56,15 @@ class VibrationApp:
         self.controller_id = None
         self.vibration_thread = None
         self.is_vibrating = False
+
+        latest_version = check_github_release()
+        if latest_version and latest_version != current_version:
+            self.version_warning = f"新しいバージョン {latest_version} が利用可能です！"
+        else:
+            self.version_warning = "現在のバージョンは最新です。"
+        
+        self.version_label = tk.Label(root, text=self.version_warning)
+        self.version_label.pack()
 
         self.controller_label = tk.Label(root, text="接続されているコントローラー:")
         self.controller_label.pack()
@@ -93,24 +120,21 @@ class VibrationApp:
     def run_vibration(self):
         try:
             pattern = self.rhythm.get()
-            time_step = 0  # 時間の経過を追跡
+            time_step = 0
             while self.is_vibrating:
                 left_motor = self.left_motor_slider.get()
                 right_motor = self.right_motor_slider.get()
 
                 if pattern == "ウェーブ":
-                    # sin波によるウェーブ (2000から最大値まで)
-                    wave_value = math.sin(time_step)  # -1から1までの値
+                    wave_value = math.sin(time_step)
                     left_motor = int(((wave_value * 0.5 + 0.5) * (65535 - 2000)) + 2000)
                     right_motor = left_motor
 
                 elif pattern == "ランダム":
-                    # ランダム振動
                     left_motor = random.randint(0, 65535)
                     right_motor = random.randint(0, 65535)
 
                 elif pattern == "強弱":
-                    # 強弱パターン
                     left_motor = 65535 if int(time_step) % 2 == 0 else 0
                     right_motor = 65535 if int(time_step) % 2 == 0 else 0
 
